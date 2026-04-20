@@ -1,44 +1,48 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>WebSocket Test</title>
+  <title>socket testing</title>
 </head>
 <body>
 
-<h2>WebSocket Test</h2>
-<button id="btn">Send Message</button>
+<h2>websocket test page</h2>
+<button id="btn">send test json</button>
 
 <script>
 let ws;
 
 window.onload = () => {
+  // connecting as user1 for now just to test the /ws/uid route
+  // changed back to 8000 since everything is merged into main.py now
   ws = new WebSocket("ws://localhost:8000/ws/user1");
 
   ws.onopen = () => {
-    console.log("✅ Connected to server");
+    console.log("connection opened finally");
   };
 
   ws.onmessage = (e) => {
-    console.log("📩 Received:", e.data);
+    // this shows us whatever the server broadcasts (like lobby updates)
+    console.log("server sent something back:", e.data);
   };
 
   ws.onclose = () => {
-    console.log("❌ Connection closed");
+    console.log("socket closed");
   };
 
   ws.onerror = (err) => {
-    console.log("⚠️ Error:", err);
+    console.log("socket error happened:", err);
   };
 
   document.getElementById("btn").onclick = () => {
     if (ws.readyState === WebSocket.OPEN) {
-      console.log("🚀 Sending message...");
+      console.log("sending dummy challenge/message...");
+      // testing if the server accepts a basic json object
       ws.send(JSON.stringify({
         type: "message",
-        msg: "hello"
+        msg: "test check 123"
       }));
     } else {
-      console.log("❌ WebSocket not connected yet");
+      console.log("still connecting... wait a sec");
     }
   };
 };

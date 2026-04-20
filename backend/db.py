@@ -1,7 +1,7 @@
 """
-DEPRECATED — This file has been merged into main.py.
-All endpoints (login, WebSocket, leaderboard) now run from a single FastAPI server.
+merged this file into main.py so we don't have to run two separate servers.
+everything (login, websocket, leaderboard) is now in one place.
 
-Run the unified server with:
-    uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+just run the unified server:
+uvicorn backend.main:app --reload --port 8000
 """

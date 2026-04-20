@@ -9,7 +9,6 @@
 <body>
 
 <div class="page">
-    <!-- ── HEADER ── -->
     <header class="header">
         <div class="header-left">
             <div class="logo-mark">ARENA.OS</div>
@@ -26,9 +25,7 @@
         <span class="section-meta-label">GLOBAL_LEADERBOARD</span>
     </div>
 
-    <!-- ── MAIN GRID ── -->
     <div class="grid">
-        <!-- Left Panel: Context -->
         <div class="col-left">
             <div class="panel">
                 <div class="eyebrow">ELITE_TIER</div>
@@ -41,7 +38,6 @@
             </div>
         </div>
 
-        <!-- Right Panel: Data -->
         <div class="col-right">
             <div class="panel panel--surface">
                 <div class="feed-header">
@@ -63,9 +59,11 @@
         const totalCount = document.getElementById('total-count');
 
         try {
+            // hitting the leaderboard endpoint in main.py
             const res = await fetch('/leaderboard');
             const data = await res.json();
 
+            // if the db is empty or something goes wrong
             if (!data.length) {
                 container.innerHTML = '<div style="font-family: var(--font-mono); font-size: 12px; opacity: 0.5;">NO_NODES_FOUND</div>';
                 return;
@@ -73,6 +71,7 @@
 
             totalCount.textContent = `NODES: ${data.length}`;
 
+            // building the table header
             let html = `
                 <table>
                     <thead>
@@ -86,8 +85,10 @@
                     <tbody>
             `;
 
+            // looping through every player sent by the backend
             data.forEach((player, i) => {
                 const rank = i + 1;
+                // formatting the match history string
                 const recordStr = `${player.wins || 0}/${player.losses || 0}/${player.draws || 0}`;
 
                 html += `
@@ -107,17 +108,19 @@
             container.innerHTML = html;
 
         } catch (err) {
+            // showing the error in the console-style UI if it fails
             container.innerHTML = `<div style="color: var(--destructive); font-family: var(--font-mono); font-size: 12px;">CRITICAL_ERROR: ${err.message}</div>`;
         }
     }
 
+    // basic function to stop people from injecting weird scripts through their names
     function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
 
-    // Load on page load
+    // load the data automatically as soon as the user opens the page
     loadLeaderboard();
 </script>
 

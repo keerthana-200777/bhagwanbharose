@@ -25,7 +25,6 @@
     </div>
 
     <div class="grid">
-        <!-- Left Panel: Text & Actions -->
         <div class="col-left">
             <div class="panel">
                 <div class="eyebrow">AWAITING BIOMETRICS</div>
@@ -50,7 +49,6 @@
             </div>
         </div>
 
-        <!-- Right Panel: Camera Feed -->
         <div class="col-right">
             <div class="panel panel--surface">
                 <div class="feed-header">
@@ -70,7 +68,7 @@
                     </div>
                     <div class="feed-meta">F_TRACKING: ACTIVE</div>
                 </div>
-                <canvas id="canvas" width="400" height="300" class="hidden"></canvas>
+                <canvas id="canvas" width="400" height="300" style="display:none;"></canvas>
             </div>
         </div>
     </div>
@@ -83,10 +81,12 @@
     const statusLabel = document.getElementById('auth-status');
     const btn = document.getElementById('login-btn');
 
+    // asking for camera permission immediately on load
     navigator.mediaDevices.getUserMedia({ video: true })
         .then(stream => { video.srcObject = stream; })
         .catch(err => { 
-            msg.innerText = "Camera error: " + err.message; 
+            // if they block the camera, show an error so they know why it failed
+            msg.innerText = "camera error: " + err.message; 
             statusLabel.innerText = "ERROR";
             statusLabel.className = "status-value status--error";
         });
@@ -94,15 +94,19 @@
     async function capture() {
         if (!video.srcObject) return;
         
+        // lock the button so they dont spam the backend while it's thinking
         btn.disabled = true;
         statusLabel.innerText = "CHECKING";
         statusLabel.className = "status-value status--checking";
-        msg.innerText = "Analyzing biometric signature...";
+        msg.innerText = "analyzing face... pls wait";
 
+        // drawing the current video frame onto the hidden canvas
         canvas.getContext('2d').drawImage(video, 0, 0, 400, 300);
+        // ripping the jpeg out of the canvas and cleaning the header so it's pure base64
         const imageData = canvas.toDataURL('image/jpeg').split(',')[1];
 
         try {
+            // hitting the unified backend we built
             const res = await fetch('/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -113,20 +117,26 @@
             if (data.status === "success") {
                 statusLabel.innerText = "SUCCESS";
                 statusLabel.className = "status-value status--success";
-                msg.innerText = "Welcome, " + data.name + "! Redirecting...";
+                msg.innerText = "welcome " + data.name + ", sending you to the lobby...";
+                
+                // storing stuff locally so app.html can use it
                 localStorage.setItem("uid", data.uid);
                 localStorage.setItem("name", data.name);
-                setTimeout(() => { window.location.href = "/app"; }, 1000);
+                
+                // wait a sec so the user can see the green success bar
+                setTimeout(() => { window.location.href = "/app"; }, 1200);
             } else {
+                // if the face doesn't match, let them try again
                 statusLabel.innerText = "FAILED";
                 statusLabel.className = "status-value status--error";
                 msg.innerText = data.message;
                 btn.disabled = false;
             }
         } catch(e) {
+            // probably a server crash or network issue
             statusLabel.innerText = "ERROR";
             statusLabel.className = "status-value status--error";
-            msg.innerText = "Network error occurred.";
+            msg.innerText = "cant connect to backend";
             btn.disabled = false;
         }
     }
