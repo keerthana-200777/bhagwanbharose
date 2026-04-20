@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Arena | Rankings</title>
+    <link rel="stylesheet" href="/static/leaderboard.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="page">
+    <!-- ── HEADER ── -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo-mark">ARENA.OS</div>
+            <div class="chip chip--solid">RANKINGS</div>
+        </div>
+        <div class="header-right">
+            <a href="/app" class="btn-secondary">BACK TO ARENA</a>
+            <div class="dot-badge">03</div>
+        </div>
+    </header>
+
+    <div class="section-meta">
+        <span class="section-meta-num">/003</span>
+        <span class="section-meta-label">GLOBAL_LEADERBOARD</span>
+    </div>
+
+    <!-- ── MAIN GRID ── -->
+    <div class="grid">
+        <!-- Left Panel: Context -->
+        <div class="col-left">
+            <div class="panel">
+                <div class="eyebrow">ELITE_TIER</div>
+                <h1 class="title">Hall of<br>Legends</h1>
+                <p class="lead">Viewing global combat effectiveness ratings. Top performers in the Arena network.</p>
+                
+                <div style="margin-top: 32px;">
+                    <button class="btn-secondary" onclick="loadLeaderboard()">REFRESH_DATA</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Data -->
+        <div class="col-right">
+            <div class="panel panel--surface">
+                <div class="feed-header">
+                    <div class="feed-label">LIVE_QUERY // ALL_NODES</div>
+                    <div class="feed-rec" id="total-count">...</div>
+                </div>
+
+                <div class="table-container" id="leaderboard-content">
+                    <div style="font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.1em; color: var(--accent);">INITIALIZING_SCAN...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function loadLeaderboard() {
+        const container = document.getElementById('leaderboard-content');
+        const totalCount = document.getElementById('total-count');
+
+        try {
+            const res = await fetch('/leaderboard');
+            const data = await res.json();
+
+            if (!data.length) {
+                container.innerHTML = '<div style="font-family: var(--font-mono); font-size: 12px; opacity: 0.5;">NO_NODES_FOUND</div>';
+                return;
+            }
+
+            totalCount.textContent = `NODES: ${data.length}`;
+
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>RANK</th>
+                            <th>IDENTITY</th>
+                            <th>RECORD (W/L/D)</th>
+                            <th>ELO_RATING</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            data.forEach((player, i) => {
+                const rank = i + 1;
+                const recordStr = `${player.wins || 0}/${player.losses || 0}/${player.draws || 0}`;
+
+                html += `
+                    <tr>
+                        <td class="rank-cell">#${rank.toString().padStart(3, '0')}</td>
+                        <td>
+                            <div class="name-cell">${escapeHtml(player.name)}</div>
+                            <div style="font-family: var(--font-mono); font-size: 10px; opacity: 0.4;">UID: ${player.uid}</div>
+                        </td>
+                        <td class="record-cell">${recordStr}</td>
+                        <td class="elo-cell">${player.elo_rating}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+
+        } catch (err) {
+            container.innerHTML = `<div style="color: var(--destructive); font-family: var(--font-mono); font-size: 12px;">CRITICAL_ERROR: ${err.message}</div>`;
+        }
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Load on page load
+    loadLeaderboard();
+</script>
+
+</body>
+</html>

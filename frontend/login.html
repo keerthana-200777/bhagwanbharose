@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Arena | Identity Verification</title>
+    <link rel="stylesheet" href="/static/login.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="page">
+    <header class="header">
+        <div class="header-left">
+            <div class="logo-mark">ARENA.OS</div>
+            <div class="chip chip--solid">v2.0</div>
+        </div>
+        <div class="header-right">
+            <div class="chip chip--accent">SECURE_NODE</div>
+            <div class="dot-badge">01</div>
+        </div>
+    </header>
+
+    <div class="section-meta">
+        <span class="section-meta-num">/001</span>
+        <span class="section-meta-label">IDENTITY PROTOCOL</span>
+    </div>
+
+    <div class="grid">
+        <!-- Left Panel: Text & Actions -->
+        <div class="col-left">
+            <div class="panel">
+                <div class="eyebrow">AWAITING BIOMETRICS</div>
+                <h1 class="title">System<br>Access</h1>
+                <p class="lead">Initiate biometric scan to authenticate against the Arena network.</p>
+
+                <div class="status-block">
+                    <div class="status-row">
+                        <span class="status-label">STATUS</span>
+                        <span class="status-value status--idle" id="auth-status">IDLE</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="status-label">MESSAGE</span>
+                        <span class="status-message" id="msg">Awaiting user input.</span>
+                    </div>
+                </div>
+
+                <button class="btn-primary" onclick="capture()" id="login-btn">
+                    <span class="btn-label">INITIATE SCAN</span>
+                    <span class="btn-key">[ENT]</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Right Panel: Camera Feed -->
+        <div class="col-right">
+            <div class="panel panel--surface">
+                <div class="feed-header">
+                    <div class="feed-label">CAM_FEED // 01</div>
+                    <div class="feed-rec">REC</div>
+                </div>
+
+                <div class="feed">
+                    <video id="video" autoplay playsinline></video>
+                    <div class="target-overlay">
+                        <div class="target-box">
+                            <div class="target-corner tl"></div>
+                            <div class="target-corner tr"></div>
+                            <div class="target-corner bl"></div>
+                            <div class="target-corner br"></div>
+                        </div>
+                    </div>
+                    <div class="feed-meta">F_TRACKING: ACTIVE</div>
+                </div>
+                <canvas id="canvas" width="400" height="300" class="hidden"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const msg = document.getElementById('msg');
+    const statusLabel = document.getElementById('auth-status');
+    const btn = document.getElementById('login-btn');
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => { video.srcObject = stream; })
+        .catch(err => { 
+            msg.innerText = "Camera error: " + err.message; 
+            statusLabel.innerText = "ERROR";
+            statusLabel.className = "status-value status--error";
+        });
+
+    async function capture() {
+        if (!video.srcObject) return;
+        
+        btn.disabled = true;
+        statusLabel.innerText = "CHECKING";
+        statusLabel.className = "status-value status--checking";
+        msg.innerText = "Analyzing biometric signature...";
+
+        canvas.getContext('2d').drawImage(video, 0, 0, 400, 300);
+        const imageData = canvas.toDataURL('image/jpeg').split(',')[1];
+
+        try {
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imageData })
+            });
+            const data = await res.json();
+            
+            if (data.status === "success") {
+                statusLabel.innerText = "SUCCESS";
+                statusLabel.className = "status-value status--success";
+                msg.innerText = "Welcome, " + data.name + "! Redirecting...";
+                localStorage.setItem("uid", data.uid);
+                localStorage.setItem("name", data.name);
+                setTimeout(() => { window.location.href = "/app"; }, 1000);
+            } else {
+                statusLabel.innerText = "FAILED";
+                statusLabel.className = "status-value status--error";
+                msg.innerText = data.message;
+                btn.disabled = false;
+            }
+        } catch(e) {
+            statusLabel.innerText = "ERROR";
+            statusLabel.className = "status-value status--error";
+            msg.innerText = "Network error occurred.";
+            btn.disabled = false;
+        }
+    }
+</script>
+</body>
+</html>

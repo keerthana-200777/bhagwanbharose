@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Arena | Lobby</title>
+    <link rel="stylesheet" href="/static/app.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="page">
+    <!-- ── HEADER ── -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo-mark">ARENA.OS</div>
+            <div class="chip chip--solid" id="user-badge">USER: ...</div>
+        </div>
+        <div class="header-right">
+            <a href="/leaderboard-page" class="btn-secondary" style="text-decoration:none">LEADERBOARD</a>
+            <button class="btn-secondary" onclick="logout()">LOGOUT</button>
+            <div class="dot-badge">02</div>
+        </div>
+    </header>
+
+    <div class="section-meta">
+        <span class="section-meta-num">/002</span>
+        <span class="section-meta-label">MATCHMAKING LAYER</span>
+    </div>
+
+    <!-- ── LOBBY / GAME ── -->
+    <div class="grid">
+        <!-- Left Panel: Context -->
+        <div class="col-left">
+            <div class="panel">
+                <div class="eyebrow" id="panel-mode">LOBBY_MODE</div>
+                <h1 class="title" id="game-title">Nexus<br>Lobby</h1>
+                <p class="lead" id="game-desc">Awaiting challengers. Select an opponent to initiate combat.</p>
+
+                <!-- Status Block (Game Only) -->
+                <div class="status-block hidden" id="game-info">
+                    <div class="status-row">
+                        <span class="status-label">MATCH_STATUS</span>
+                        <span class="status-value game-status" id="game-status">AWAITING</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="status-label">YOU</span>
+                        <span class="status-value" id="you-label">X</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="status-label">OPPONENT</span>
+                        <span class="status-value" id="opp-label">O</span>
+                    </div>
+                </div>
+
+                <div class="row-actions hidden" id="game-actions">
+                    <button class="btn-secondary" id="back-btn" onclick="backToLobby()">RETURN TO LOBBY</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Dynamic Content -->
+        <div class="col-right">
+            <div class="panel panel--surface" id="right-panel">
+                
+                <!-- Lobby View -->
+                <div id="lobby-screen">
+                    <div class="feed-header">
+                        <div class="feed-label">ACTIVE_NODES</div>
+                        <div class="feed-rec" id="online-count">(0)</div>
+                    </div>
+                    <div class="user-list" id="users-grid">
+                        <div class="user-list-empty">Scanning for connections...</div>
+                    </div>
+                </div>
+
+                <!-- Game View -->
+                <div id="game-screen" class="hidden">
+                    <div class="feed-header">
+                        <div class="feed-label">COMBAT_ARENA</div>
+                        <div class="feed-rec">LIVE</div>
+                    </div>
+                    <div class="tic-board" id="board">
+                        <!-- 9 buttons injected via JS -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ── CHALLENGE MODAL ── -->
+    <div id="challenge-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
+        <div class="panel" style="max-width:400px; width:90%; background:var(--background);">
+            <div class="eyebrow">INCOMING ALERT</div>
+            <h2 class="title" style="font-size:32px; margin-bottom:16px;">Challenge!</h2>
+            <p class="lead" id="challenge-text">Someone challenged you.</p>
+            <div class="row-actions" style="margin-top:32px; display:flex; gap:12px;">
+                <button class="btn-secondary" id="accept-btn" style="flex:1; border-color:var(--accent); color:var(--accent)">ACCEPT</button>
+                <button class="btn-secondary" id="decline-btn">DECLINE</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ── Session check ──
+    const uid = localStorage.getItem('uid');
+    const myName = localStorage.getItem('name');
+
+    if (!uid) {
+        window.location.href = '/login';
+    }
+
+    document.getElementById('user-badge').textContent = `USER: ${myName || uid}`;
+
+    // ── WebSocket Connection ──
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/${uid}`);
+
+    // ── DOM Elements ──
+    const lobbyScreen = document.getElementById('lobby-screen');
+    const gameScreen = document.getElementById('game-screen');
+    const usersGrid = document.getElementById('users-grid');
+    const boardDiv = document.getElementById('board');
+    
+    const panelMode = document.getElementById('panel-mode');
+    const gameTitle = document.getElementById('game-title');
+    const gameDesc = document.getElementById('game-desc');
+    
+    const gameInfo = document.getElementById('game-info');
+    const gameActions = document.getElementById('game-actions');
+    const gameStatus = document.getElementById('game-status');
+    const challengeModal = document.getElementById('challenge-modal');
+    const challengeText = document.getElementById('challenge-text');
+    const onlineCount = document.getElementById('online-count');
+
+    // ── Game State ──
+    let currentRoomId = null;
+    let mySymbol = null;
+    let board = ['','','','','','','','',''];
+    let gameOver = false;
+    let pendingChallenger = null;
+
+    // ── WebSocket handlers ──
+    ws.onopen = () => { console.log('Connected to server'); };
+    ws.onclose = () => { alert('⚠️ Disconnected from server. Please refresh.'); };
+    ws.onerror = (err) => { console.error('WebSocket error:', err); };
+
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        switch (data.type) {
+            case 'lobby_update':
+                renderLobby(data.users);
+                break;
+            case 'challenge_request':
+                showChallengeModal(data.from, data.from_name);
+                break;
+            case 'challenge_declined':
+                alert(`${data.from_name || data.from} declined your challenge.`);
+                break;
+            case 'start_game':
+                startGame(data);
+                break;
+            case 'game_update':
+                updateBoard(data.board, data.turn);
+                break;
+            case 'game_over':
+                handleGameOver(data);
+                break;
+            case 'error':
+                alert('⚠️ ' + data.message);
+                break;
+        }
+    };
+
+    // ── Lobby ──
+    function renderLobby(users) {
+        const otherUsers = users.filter(u => u.uid !== uid);
+        onlineCount.textContent = `(${otherUsers.length})`;
+
+        if (otherUsers.length === 0) {
+            usersGrid.innerHTML = '<div class="user-list-empty">No active nodes detected.</div>';
+            return;
+        }
+
+        usersGrid.innerHTML = '';
+        otherUsers.forEach(user => {
+            const btn = document.createElement('button');
+            btn.className = 'user-btn';
+            btn.disabled = currentRoomId !== null;
+            
+            btn.innerHTML = `
+                <div>
+                    <span class="uid">${escapeHtml(user.name)}</span>
+                    <span style="opacity:0.5; margin-left:8px">⚡ ${user.elo_rating}</span>
+                </div>
+                <span class="arrow">CHALLENGE &rarr;</span>
+            `;
+            
+            btn.onclick = () => {
+                ws.send(JSON.stringify({ type: 'challenge', to: user.uid }));
+                btn.querySelector('.arrow').innerHTML = "SENT!";
+                btn.disabled = true;
+                setTimeout(() => {
+                    btn.querySelector('.arrow').innerHTML = "CHALLENGE &rarr;";
+                    btn.disabled = currentRoomId !== null;
+                }, 3000);
+            };
+
+            usersGrid.appendChild(btn);
+        });
+    }
+
+    // ── Challenge Modal ──
+    function showChallengeModal(fromUid, fromName) {
+        pendingChallenger = fromUid;
+        challengeText.textContent = `${fromName || fromUid} has initiated combat.`;
+        challengeModal.style.display = 'flex';
+
+        document.getElementById('accept-btn').onclick = () => {
+            ws.send(JSON.stringify({ type: 'challenge_response', to: pendingChallenger, accepted: true }));
+            challengeModal.style.display = 'none';
+        };
+
+        document.getElementById('decline-btn').onclick = () => {
+            ws.send(JSON.stringify({ type: 'challenge_response', to: pendingChallenger, accepted: false }));
+            challengeModal.style.display = 'none';
+        };
+    }
+
+    // ── Game ──
+    function startGame(data) {
+        currentRoomId = data.room_id;
+        mySymbol = data.symbol;
+        board = data.board;
+        gameOver = false;
+
+        // Update labels
+        document.getElementById('you-label').textContent = `You (${mySymbol})`;
+        document.getElementById('opp-label').textContent = `${data.opponent_name || data.opponent} (${mySymbol === 'X' ? 'O' : 'X'})`;
+        
+        panelMode.textContent = "COMBAT_MODE";
+        gameTitle.innerHTML = `vs ${data.opponent_name || data.opponent}`;
+        gameDesc.textContent = "Engage in tactical combat.";
+
+        // Switch screens
+        lobbyScreen.classList.add('hidden');
+        gameScreen.classList.remove('hidden');
+        gameInfo.classList.remove('hidden');
+        gameActions.classList.add('hidden'); // Hide return btn until game over
+
+        updateBoard(data.board, data.turn);
+    }
+
+    function updateBoard(newBoard, turn) {
+        board = newBoard;
+        boardDiv.innerHTML = '';
+
+        board.forEach((val, i) => {
+            const cell = document.createElement('button');
+            cell.className = 'tic-cell';
+            if (val !== '') cell.classList.add('filled');
+            
+            cell.textContent = val;
+            cell.onclick = () => {
+                if (val === '' && !gameOver && turn === uid) {
+                    ws.send(JSON.stringify({ type: 'move', room_id: currentRoomId, index: i }));
+                }
+            };
+            boardDiv.appendChild(cell);
+        });
+
+        if (!gameOver) {
+            if (turn === uid) {
+                gameStatus.textContent = 'YOUR_TURN';
+                gameStatus.className = 'status-value game-status win';
+            } else {
+                gameStatus.textContent = 'OPPONENT_TURN';
+                gameStatus.className = 'status-value game-status draw';
+            }
+        }
+    }
+
+    function handleGameOver(data) {
+        gameOver = true;
+
+        if (data.draw) {
+            gameStatus.textContent = 'DRAW';
+            gameStatus.className = 'status-value game-status draw';
+        } else if (data.winner === uid) {
+            gameStatus.textContent = 'VICTORY';
+            gameStatus.className = 'status-value game-status win';
+        } else {
+            gameStatus.textContent = 'DEFEAT';
+            gameStatus.className = 'status-value game-status lose';
+        }
+
+        boardDiv.querySelectorAll('.tic-cell').forEach(c => { c.disabled = true; });
+        gameActions.classList.remove('hidden'); // Show "Return to Lobby"
+    }
+
+    function backToLobby() {
+        gameScreen.classList.add('hidden');
+        lobbyScreen.classList.remove('hidden');
+        gameInfo.classList.add('hidden');
+        gameActions.classList.add('hidden');
+        
+        panelMode.textContent = "LOBBY_MODE";
+        gameTitle.innerHTML = "Nexus<br>Lobby";
+        gameDesc.textContent = "Awaiting challengers. Select an opponent to initiate combat.";
+        
+        currentRoomId = null;
+        mySymbol = null;
+        gameOver = false;
+        
+        // Re-enable challenge buttons
+        document.querySelectorAll('.user-btn').forEach(btn => {
+            if (btn.querySelector('.arrow').textContent !== 'SENT!') {
+                btn.disabled = false;
+            }
+        });
+    }
+
+    // ── Logout ──
+    async function logout() {
+        try { await fetch('/logout', { method: 'POST', credentials: 'include' }); } catch (e) {}
+        localStorage.removeItem('uid');
+        localStorage.removeItem('name');
+        ws.close();
+        window.location.href = '/login';
+    }
+
+    // ── Utilities ──
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+
+</body>
+</html>

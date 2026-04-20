@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebSocket Test</title>
+</head>
+<body>
+
+<h2>WebSocket Test</h2>
+<button id="btn">Send Message</button>
+
+<script>
+let ws;
+
+window.onload = () => {
+  ws = new WebSocket("ws://localhost:8000/ws/user1");
+
+  ws.onopen = () => {
+    console.log("✅ Connected to server");
+  };
+
+  ws.onmessage = (e) => {
+    console.log("📩 Received:", e.data);
+  };
+
+  ws.onclose = () => {
+    console.log("❌ Connection closed");
+  };
+
+  ws.onerror = (err) => {
+    console.log("⚠️ Error:", err);
+  };
+
+  document.getElementById("btn").onclick = () => {
+    if (ws.readyState === WebSocket.OPEN) {
+      console.log("🚀 Sending message...");
+      ws.send(JSON.stringify({
+        type: "message",
+        msg: "hello"
+      }));
+    } else {
+      console.log("❌ WebSocket not connected yet");
+    }
+  };
+};
+</script>
+
+</body>
+</html>
